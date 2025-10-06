@@ -3,7 +3,7 @@ pipeline {
 
     environment {
         // These should be defined in Jenkins Credentials (Username with Password)
-        DOCKER_CREDENTIALS_ID = 'docker-hub-credentials'
+        DOCKER_CREDENTIALS_ID = 'dockerhub-credentials-id'
         DOCKER_IMAGE_NAME = 'luascale/nextjs-app'
     }
 
