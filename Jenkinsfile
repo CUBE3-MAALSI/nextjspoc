@@ -1,46 +1,64 @@
 pipeline {
     agent any
+
     environment {
-        DOCKER_IMAGE = 'luascale/nextjs-app'
-        REGISTRY_CREDENTIALS = 'dockerhub-credentials-id'
-        KUBECONFIG = '/home/jenkins/.kube/config'
+        // These should be defined in Jenkins Credentials (Username with Password)
+        DOCKER_CREDENTIALS_ID = 'docker-hub-credentials'
+        DOCKER_IMAGE_NAME = 'luascale/nextjs-app'
     }
+
     stages {
         stage('Checkout') {
             steps {
                 checkout scm
             }
         }
+
         stage('Build Docker Image') {
             steps {
                 script {
-                    docker.build(DOCKER_IMAGE)
+                    // Build the Docker image
+                    dockerImage = docker.build(DOCKER_IMAGE_NAME)
                 }
             }
         }
-        stage('Push to Docker Registry') {
+
+        stage('Push to Docker Hub') {
             steps {
                 script {
-                    withCredentials([usernamePassword(credentialsId: REGISTRY_CREDENTIALS, usernameVariable: 'DOCKER_USERNAME', passwordVariable: 'DOCKER_PASSWORD')]) {
-                        sh 'echo "$DOCKER_PASSWORD" | docker login -u "$DOCKER_USERNAME" --password-stdin'
-                        docker.push(DOCKER_IMAGE)
+                    // Use credentials safely to push the image
+                    docker.withRegistry('https://index.docker.io/v1/', DOCKER_CREDENTIALS_ID) {
+                        dockerImage.push()
                     }
                 }
             }
         }
+
         stage('Deploy to Kubernetes') {
+            when {
+                expression {
+                    // Optional: deploy only on main branch
+                    return env.BRANCH_NAME == 'main'
+                }
+            }
             steps {
                 script {
-                    sh 'kubectl apply -f deployment.yaml'
-                    sh 'kubectl apply -f service.yaml'
-                    sh 'kubectl apply -f ingress.yaml'
+                    // Example: using kubectl to apply deployment
+                    sh 'kubectl apply -f k8s/deployment.yaml'
                 }
             }
         }
     }
+
     post {
         always {
             cleanWs()
+        }
+        success {
+            echo 'Pipeline finished successfully!'
+        }
+        failure {
+            echo 'Pipeline failed. Check logs.'
         }
     }
 }
