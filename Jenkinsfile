@@ -2,9 +2,10 @@ pipeline {
     agent any
 
     environment {
-        // These should be defined in Jenkins Credentials (Username with Password)
         DOCKER_CREDENTIALS_ID = 'dockerhub-credentials-id'
         DOCKER_IMAGE_NAME = 'luascale/nextjs-app'
+        CONTAINER_NAME = 'nextjs-app'
+        SERVER_PORT = '3000'
     }
 
     stages {
@@ -17,7 +18,6 @@ pipeline {
         stage('Build Docker Image') {
             steps {
                 script {
-                    // Build the Docker image
                     dockerImage = docker.build(DOCKER_IMAGE_NAME)
                 }
             }
@@ -26,25 +26,23 @@ pipeline {
         stage('Push to Docker Hub') {
             steps {
                 script {
-                    // Use credentials safely to push the image
                     docker.withRegistry('https://index.docker.io/v1/', DOCKER_CREDENTIALS_ID) {
-                        dockerImage.push()
+                        dockerImage.push('latest')
                     }
                 }
             }
         }
 
-        stage('Deploy to Kubernetes') {
-            when {
-                expression {
-                    // Optional: deploy only on main branch
-                    return env.BRANCH_NAME == 'main'
-                }
-            }
+        stage('Deploy on Server') {
             steps {
                 script {
-                    // Example: using kubectl to apply deployment
-                    sh 'kubectl apply -f k8s/deployment.yaml'
+                    // Ensure the container is stopped and removed if exists
+                    sh """
+                    docker stop ${CONTAINER_NAME} || true
+                    docker rm ${CONTAINER_NAME} || true
+                    docker pull ${DOCKER_IMAGE_NAME}:latest
+                    docker run -d -p ${SERVER_PORT}:3000 --name ${CONTAINER_NAME} ${DOCKER_IMAGE_NAME}:latest
+                    """
                 }
             }
         }
@@ -53,12 +51,6 @@ pipeline {
     post {
         always {
             cleanWs()
-        }
-        success {
-            echo 'Pipeline finished successfully!'
-        }
-        failure {
-            echo 'Pipeline failed. Check logs.'
         }
     }
 }
